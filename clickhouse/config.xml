@@ -1,0 +1,8 @@
+<!--
+  Materialized views run as the user who created them (the admin, via apply-games.sh)
+  instead of the user inserting. Without this, the insert-only ingest user can't read
+  events, so per-game views would silently stay empty.
+-->
+<clickhouse>
+    <ignore_empty_sql_security_in_create_view_query>0</ignore_empty_sql_security_in_create_view_query>
+</clickhouse>

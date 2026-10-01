@@ -1,0 +1,58 @@
+name: meridian
+
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:26.8.15.10 # 26.8 LTS
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_INGEST_PASSWORD: ${CLICKHOUSE_INGEST_PASSWORD:?set in .env}
+      CLICKHOUSE_GRAFANA_PASSWORD: ${CLICKHOUSE_GRAFANA_PASSWORD:?set in .env}
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - ./clickhouse/init:/docker-entrypoint-initdb.d:ro
+      - ./clickhouse/config.xml:/etc/clickhouse-server/config.d/meridian.xml:ro
+      - ./clickhouse/users.xml:/etc/clickhouse-server/users.d/meridian.xml:ro
+    ulimits:
+      nofile: 262144
+
+  grafana:
+    image: grafana/grafana:13.2.3
+    restart: unless-stopped
+    depends_on: [clickhouse]
+    environment:
+      GF_SERVER_ROOT_URL: https://${MERIDIAN_DOMAIN:?set in .env}/
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set in .env}
+      # Skip Grafana's default plugin downloads; install only the ClickHouse data source.
+      # GF_INSTALL_PLUGINS logs a deprecation warning, but it's the only installer that
+      # still runs with preinstall disabled. Recheck when upgrading Grafana.
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+      GF_INSTALL_PLUGINS: grafana-clickhouse-datasource 4.22.0
+      GF_INSTALL_PLUGINS_FORCE: "true"
+      CLICKHOUSE_GRAFANA_PASSWORD: ${CLICKHOUSE_GRAFANA_PASSWORD}
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./dashboards:/meridian/dashboards:ro
+      - ./games:/meridian/games:ro
+
+  caddy:
+    image: caddy:2.11.4
+    restart: unless-stopped
+    depends_on: [clickhouse, grafana]
+    environment:
+      MERIDIAN_DOMAIN: ${MERIDIAN_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  clickhouse-data:
+  grafana-data:
+  caddy-data:
+  caddy-config:

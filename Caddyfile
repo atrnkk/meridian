@@ -1,0 +1,21 @@
+{$MERIDIAN_DOMAIN} {
+	# Game servers insert events here. Requests always authenticate as the ingest
+	# user, so no other ClickHouse user is reachable from outside.
+	@ingest {
+		method POST
+		path /ingest
+	}
+	handle @ingest {
+		request_body {
+			max_size 8MB
+		}
+		request_header -Authorization
+		request_header X-ClickHouse-User ingest
+		rewrite * /?
+		reverse_proxy clickhouse:8123
+	}
+
+	handle {
+		reverse_proxy grafana:3000
+	}
+}

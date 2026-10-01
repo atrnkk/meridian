@@ -1,0 +1,58 @@
+<!--
+  Meridian's ClickHouse users. Passwords come from .env, so changing one only needs
+  `docker compose up -d`. The built-in `default` user stays as the admin and can only
+  connect from inside the container (`docker compose exec clickhouse clickhouse-client`).
+-->
+<clickhouse>
+    <users>
+        <!-- Used by game servers. Its password lives on Roblox, so it can only insert events. -->
+        <ingest>
+            <password from_env="CLICKHOUSE_INGEST_PASSWORD"/>
+            <networks><ip>::/0</ip></networks>
+            <profile>ingest</profile>
+            <quota>ingest</quota>
+            <grants>
+                <query>GRANT INSERT ON meridian.events</query>
+            </grants>
+        </ingest>
+
+        <!-- Used by Grafana. Read-only. -->
+        <grafana>
+            <password from_env="CLICKHOUSE_GRAFANA_PASSWORD"/>
+            <networks><ip>::/0</ip></networks>
+            <profile>grafana</profile>
+            <quota>default</quota>
+            <grants>
+                <query>GRANT SELECT ON meridian.*</query>
+            </grants>
+        </grafana>
+    </users>
+
+    <profiles>
+        <ingest>
+            <!-- Many servers sending small batches: let ClickHouse buffer them into larger parts. -->
+            <async_insert>1</async_insert>
+            <!-- A broken per-game view must not block inserts into events. -->
+            <materialized_views_ignore_errors>1</materialized_views_ignore_errors>
+        </ingest>
+        <grafana>
+            <readonly>1</readonly>
+            <constraints>
+                <!-- The Grafana plugin sets this on every query. -->
+                <max_execution_time><changeable_in_readonly/></max_execution_time>
+            </constraints>
+        </grafana>
+    </profiles>
+
+    <quotas>
+        <!-- Caps abuse if the ingest password leaks. About 500 servers flushing every
+             5 seconds fit comfortably; raise these as your games grow. -->
+        <ingest>
+            <interval>
+                <duration>60</duration>
+                <queries>6000</queries>
+                <written_bytes>268435456</written_bytes>
+            </interval>
+        </ingest>
+    </quotas>
+</clickhouse>

@@ -1,0 +1,28 @@
+-- Per-game views for the example game. Copy this folder to games/<your-game>/,
+-- replace 1234567890 with the game's game.GameId, uncomment, and run ./apply-games.sh.
+
+-- Name shown in Grafana's game picker.
+-- INSERT INTO meridian.games VALUES (1234567890, 'Example Game');
+
+-- Example: break the custom event Track("egg_hatched", { egg = "Frost", pet = "Penguin" })
+-- out into its own table. The view only sees new events; to backfill, run the same
+-- SELECT as an INSERT INTO meridian.example_hatches once.
+--
+-- CREATE TABLE IF NOT EXISTS meridian.example_hatches
+-- (
+--     ts      DateTime64(3, 'UTC'),
+--     egg     LowCardinality(String),
+--     pet     LowCardinality(String)
+-- )
+-- ENGINE = MergeTree
+-- ORDER BY (egg, ts)
+-- TTL toDateTime(ts) + INTERVAL 90 DAY;
+--
+-- CREATE MATERIALIZED VIEW IF NOT EXISTS meridian.example_hatches_mv
+-- TO meridian.example_hatches AS
+-- SELECT
+--     ts,
+--     JSONExtractString(props, 'egg') AS egg,
+--     JSONExtractString(props, 'pet') AS pet
+-- FROM meridian.events
+-- WHERE game_id = 1234567890 AND event = 'egg_hatched';
