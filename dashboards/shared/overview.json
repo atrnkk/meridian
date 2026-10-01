@@ -40,48 +40,6 @@
         "sort": 1,
         "query": "WITH seen AS (SELECT game_id FROM meridian.events WHERE ts > now() - INTERVAL 30 DAY GROUP BY game_id)\nSELECT game_id, if(g.name = '', toString(game_id), g.name) AS label\nFROM seen LEFT JOIN (SELECT game_id, name FROM meridian.games FINAL) AS g USING (game_id)\nUNION ALL\nSELECT 0, 'No data yet' WHERE (SELECT count() FROM seen) = 0",
         "definition": "WITH seen AS (SELECT game_id FROM meridian.events WHERE ts > now() - INTERVAL 30 DAY GROUP BY game_id)\nSELECT game_id, if(g.name = '', toString(game_id), g.name) AS label\nFROM seen LEFT JOIN (SELECT game_id, name FROM meridian.games FINAL) AS g USING (game_id)\nUNION ALL\nSELECT 0, 'No data yet' WHERE (SELECT count() FROM seen) = 0"
-      },
-      {
-        "name": "cell",
-        "label": "Cell size (studs)",
-        "type": "custom",
-        "query": "4,8,16,32,64,128",
-        "current": {
-          "text": "16",
-          "value": "16"
-        },
-        "options": [
-          {
-            "text": "4",
-            "value": "4",
-            "selected": false
-          },
-          {
-            "text": "8",
-            "value": "8",
-            "selected": false
-          },
-          {
-            "text": "16",
-            "value": "16",
-            "selected": true
-          },
-          {
-            "text": "32",
-            "value": "32",
-            "selected": false
-          },
-          {
-            "text": "64",
-            "value": "64",
-            "selected": false
-          },
-          {
-            "text": "128",
-            "value": "128",
-            "selected": false
-          }
-        ]
       }
     ]
   },
@@ -707,7 +665,7 @@
     },
     {
       "id": 13,
-      "type": "xychart",
+      "type": "geomap",
       "title": "Position heatmap",
       "gridPos": {
         "x": 8,
@@ -728,89 +686,97 @@
           },
           "editorType": "sql",
           "format": 1,
-          "rawSql": "SELECT\n    (floor(x / $cell) + 0.5) * $cell AS cell_x,\n    (floor(z / $cell) + 0.5) * $cell AS cell_z,\n    count() AS samples\nFROM meridian.events\nWHERE game_id = $game AND event = 'position' AND $__timeFilter(ts)\nGROUP BY cell_x, cell_z\nORDER BY samples\nLIMIT 20000"
+          "rawSql": "WITH (SELECT greatest(max(x) - min(x), max(z) - min(z), 1) / 150 FROM meridian.events WHERE game_id = $game AND $__timeFilter(ts) AND place_id = (SELECT place_id FROM meridian.events WHERE game_id = $game AND event = 'position' AND $__timeFilter(ts) GROUP BY place_id ORDER BY count() DESC LIMIT 1) AND event = 'position') AS step\nSELECT\n    round((floor(x / step) + 0.5) * step) AS cell_x,\n    round((floor(z / step) + 0.5) * step) AS cell_z,\n    -cell_z * 0.0001 AS lat,\n    cell_x * 0.0001 AS lon,\n    count() AS samples,\n    log1p(samples) AS weight\nFROM meridian.events\nWHERE game_id = $game AND $__timeFilter(ts) AND place_id = (SELECT place_id FROM meridian.events WHERE game_id = $game AND event = 'position' AND $__timeFilter(ts) GROUP BY place_id ORDER BY count() DESC LIMIT 1) AND event = 'position'\nGROUP BY cell_x, cell_z"
         }
       ],
       "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "continuous-BlYlRd"
-          },
-          "custom": {
-            "show": "points",
-            "pointShape": "square",
-            "pointSize": {
-              "fixed": 8
-            },
-            "pointStrokeWidth": 0,
-            "fillOpacity": 90
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "cell_x"
-            },
-            "properties": [
-              {
-                "id": "custom.axisLabel",
-                "value": "X (studs)"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "cell_z"
-            },
-            "properties": [
-              {
-                "id": "custom.axisLabel",
-                "value": "Z (studs)"
-              }
-            ]
-          }
-        ]
+        "defaults": {},
+        "overrides": []
       },
       "options": {
-        "mapping": "manual",
-        "series": [
+        "view": {
+          "id": "fit",
+          "allLayers": true,
+          "lastOnly": false,
+          "padding": 20,
+          "lat": 0,
+          "lon": 0,
+          "zoom": 20
+        },
+        "controls": {
+          "showZoom": true,
+          "mouseWheelZoom": true,
+          "showAttribution": false,
+          "showScale": false,
+          "showMeasure": false,
+          "showDebug": false
+        },
+        "basemap": {
+          "type": "carto",
+          "name": "Basemap",
+          "opacity": 0,
+          "config": {
+            "theme": "dark",
+            "showLabels": false
+          }
+        },
+        "layers": [
           {
-            "frame": {
-              "matcher": {
-                "id": "byIndex",
-                "options": 0
+            "type": "markers",
+            "name": "Extent",
+            "opacity": 0,
+            "tooltip": false,
+            "config": {
+              "showLegend": false,
+              "style": {
+                "size": {
+                  "fixed": 1
+                },
+                "color": {
+                  "fixed": "transparent"
+                }
               }
             },
-            "x": {
-              "matcher": {
-                "id": "byName",
-                "options": "cell_x"
+            "location": {
+              "mode": "coords",
+              "latitude": "lat",
+              "longitude": "lon"
+            },
+            "filterData": {
+              "id": "byRefId",
+              "options": "A"
+            }
+          },
+          {
+            "type": "heatmap",
+            "name": "Traffic",
+            "tooltip": false,
+            "config": {
+              "blur": 12,
+              "radius": 6,
+              "weight": {
+                "field": "weight",
+                "fixed": 1,
+                "min": 0.2,
+                "max": 0.75
               }
             },
-            "y": {
-              "matcher": {
-                "id": "byName",
-                "options": "cell_z"
-              }
+            "location": {
+              "mode": "coords",
+              "latitude": "lat",
+              "longitude": "lon"
             },
-            "color": {
-              "matcher": {
-                "id": "byName",
-                "options": "samples"
-              }
+            "filterData": {
+              "id": "byRefId",
+              "options": "A"
             }
           }
         ],
-        "legend": {
-          "showLegend": false
-        },
         "tooltip": {
-          "mode": "single"
+          "mode": "details"
         }
       },
-      "description": "Player position samples on the X/Z plane, across all places. The Map dashboard splits them by place and adds deaths.",
+      "description": "Where players spend time in the most played place, seen from above (X right, Z down). Scroll to zoom. The Map dashboard adds deaths and other places.",
       "pluginVersion": "13.2.3"
     },
     {

@@ -4,13 +4,15 @@
 -- Name shown in Grafana's game picker.
 -- INSERT INTO meridian.games VALUES (1234567890, 'Example Game');
 
--- Example: break the custom event Track("egg_hatched", { egg = "Frost", pet = "Penguin" })
+-- Example: break the custom event
+-- Track("egg_hatched", { egg = "Frost", pet = "Penguin" }, player)
 -- out into its own table. The view only sees new events; to backfill, run the same
 -- SELECT as an INSERT INTO meridian.example_hatches once.
 --
 -- CREATE TABLE IF NOT EXISTS meridian.example_hatches
 -- (
 --     ts      DateTime64(3, 'UTC'),
+--     user_id UInt64,
 --     egg     LowCardinality(String),
 --     pet     LowCardinality(String)
 -- )
@@ -22,6 +24,7 @@
 -- TO meridian.example_hatches AS
 -- SELECT
 --     ts,
+--     user_id,
 --     JSONExtractString(props, 'egg') AS egg,
 --     JSONExtractString(props, 'pet') AS pet
 -- FROM meridian.events

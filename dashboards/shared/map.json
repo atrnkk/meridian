@@ -7,7 +7,7 @@
   ],
   "schemaVersion": 41,
   "editable": false,
-  "refresh": "1m",
+  "refresh": "5m",
   "time": {
     "from": "now-24h",
     "to": "now"
@@ -56,7 +56,7 @@
       },
       {
         "name": "cell",
-        "label": "Cell size (studs)",
+        "label": "Spot size (studs)",
         "type": "custom",
         "query": "4,8,16,32,64,128",
         "current": {
@@ -252,7 +252,7 @@
     {
       "id": 4,
       "type": "stat",
-      "title": "Cells visited",
+      "title": "Players",
       "gridPos": {
         "x": 18,
         "y": 0,
@@ -272,7 +272,7 @@
           },
           "editorType": "sql",
           "format": 1,
-          "rawSql": "SELECT uniqExact(floor(x / $cell), floor(z / $cell)) AS cells FROM meridian.events WHERE game_id = $game AND place_id = $place AND $__timeFilter(ts) AND event = 'position'"
+          "rawSql": "SELECT uniqExact(user_id) AS players FROM meridian.events WHERE game_id = $game AND place_id = $place AND $__timeFilter(ts) AND event = 'position'"
         }
       ],
       "fieldConfig": {
@@ -297,17 +297,17 @@
         "textMode": "value",
         "justifyMode": "center"
       },
-      "description": "Distinct map cells with at least one position sample, at the selected cell size."
+      "description": "Distinct players seen in this place."
     },
     {
       "id": 5,
-      "type": "xychart",
-      "title": "Player traffic",
+      "type": "geomap",
+      "title": "Traffic and deaths",
       "gridPos": {
         "x": 0,
         "y": 4,
-        "w": 12,
-        "h": 16
+        "w": 24,
+        "h": 18
       },
       "datasource": {
         "type": "grafana-clickhouse-datasource",
@@ -322,206 +322,153 @@
           },
           "editorType": "sql",
           "format": 1,
-          "rawSql": "SELECT\n    (floor(x / $cell) + 0.5) * $cell AS cell_x,\n    (floor(z / $cell) + 0.5) * $cell AS cell_z,\n    count() AS samples\nFROM meridian.events\nWHERE game_id = $game AND place_id = $place AND $__timeFilter(ts) AND event = 'position'\nGROUP BY cell_x, cell_z\nORDER BY samples\nLIMIT 20000"
+          "rawSql": "WITH (SELECT greatest(max(x) - min(x), max(z) - min(z), 1) / 150 FROM meridian.events WHERE game_id = $game AND place_id = $place AND $__timeFilter(ts) AND event = 'position') AS step\nSELECT\n    round((floor(x / step) + 0.5) * step) AS cell_x,\n    round((floor(z / step) + 0.5) * step) AS cell_z,\n    -cell_z * 0.0001 AS lat,\n    cell_x * 0.0001 AS lon,\n    count() AS samples,\n    log1p(samples) AS weight\nFROM meridian.events\nWHERE game_id = $game AND place_id = $place AND $__timeFilter(ts) AND event = 'position'\nGROUP BY cell_x, cell_z"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "WITH (SELECT greatest(max(x) - min(x), max(z) - min(z), 1) / 150 FROM meridian.events WHERE game_id = $game AND place_id = $place AND $__timeFilter(ts) AND event = 'position') AS step\nSELECT\n    round((floor(x / step) + 0.5) * step) AS cell_x,\n    round((floor(z / step) + 0.5) * step) AS cell_z,\n    -cell_z * 0.0001 AS lat,\n    cell_x * 0.0001 AS lon,\n    count() AS deaths,\n    log1p(deaths) AS weight\nFROM meridian.events\nWHERE game_id = $game AND place_id = $place AND $__timeFilter(ts) AND event = 'death'\nGROUP BY cell_x, cell_z"
         }
       ],
       "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "continuous-BlYlRd"
-          },
-          "custom": {
-            "show": "points",
-            "pointShape": "square",
-            "pointSize": {
-              "fixed": 8
-            },
-            "pointStrokeWidth": 0,
-            "fillOpacity": 90
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "cell_x"
-            },
-            "properties": [
-              {
-                "id": "custom.axisLabel",
-                "value": "X (studs)"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "cell_z"
-            },
-            "properties": [
-              {
-                "id": "custom.axisLabel",
-                "value": "Z (studs)"
-              }
-            ]
-          }
-        ]
+        "defaults": {},
+        "overrides": []
       },
       "options": {
-        "mapping": "manual",
-        "series": [
+        "view": {
+          "id": "fit",
+          "allLayers": true,
+          "lastOnly": false,
+          "padding": 20,
+          "lat": 0,
+          "lon": 0,
+          "zoom": 20
+        },
+        "controls": {
+          "showZoom": true,
+          "mouseWheelZoom": true,
+          "showAttribution": false,
+          "showScale": false,
+          "showMeasure": false,
+          "showDebug": false
+        },
+        "basemap": {
+          "type": "carto",
+          "name": "Basemap",
+          "opacity": 0,
+          "config": {
+            "theme": "dark",
+            "showLabels": false
+          }
+        },
+        "layers": [
           {
-            "frame": {
-              "matcher": {
-                "id": "byIndex",
-                "options": 0
+            "type": "markers",
+            "name": "Extent",
+            "opacity": 0,
+            "tooltip": false,
+            "config": {
+              "showLegend": false,
+              "style": {
+                "size": {
+                  "fixed": 1
+                },
+                "color": {
+                  "fixed": "transparent"
+                }
               }
             },
-            "x": {
-              "matcher": {
-                "id": "byName",
-                "options": "cell_x"
+            "location": {
+              "mode": "coords",
+              "latitude": "lat",
+              "longitude": "lon"
+            },
+            "filterData": {
+              "id": "byRefId",
+              "options": "A"
+            }
+          },
+          {
+            "type": "heatmap",
+            "name": "Traffic",
+            "tooltip": false,
+            "config": {
+              "blur": 12,
+              "radius": 6,
+              "weight": {
+                "field": "weight",
+                "fixed": 1,
+                "min": 0.2,
+                "max": 0.75
               }
             },
-            "y": {
-              "matcher": {
-                "id": "byName",
-                "options": "cell_z"
+            "location": {
+              "mode": "coords",
+              "latitude": "lat",
+              "longitude": "lon"
+            },
+            "filterData": {
+              "id": "byRefId",
+              "options": "A"
+            }
+          },
+          {
+            "type": "markers",
+            "name": "Deaths",
+            "tooltip": true,
+            "config": {
+              "showLegend": false,
+              "style": {
+                "color": {
+                  "fixed": "#ffffff"
+                },
+                "opacity": 0.9,
+                "size": {
+                  "field": "deaths",
+                  "fixed": 4,
+                  "min": 3,
+                  "max": 11
+                },
+                "symbol": {
+                  "mode": "fixed",
+                  "fixed": "img/icons/marker/circle.svg"
+                },
+                "symbolAlign": {
+                  "horizontal": "center",
+                  "vertical": "center"
+                }
               }
             },
-            "color": {
-              "matcher": {
-                "id": "byName",
-                "options": "samples"
-              }
+            "location": {
+              "mode": "coords",
+              "latitude": "lat",
+              "longitude": "lon"
+            },
+            "filterData": {
+              "id": "byRefId",
+              "options": "B"
             }
           }
         ],
-        "legend": {
-          "showLegend": false
-        },
         "tooltip": {
-          "mode": "single"
+          "mode": "details"
         }
       },
-      "description": "Where players spend time, from position samples on the X/Z plane.",
+      "description": "Heatmap of where players spend time, with deaths as white dots (bigger means more). Seen from above: X right, Z down. Scroll to zoom; click a dot for details.",
       "pluginVersion": "13.2.3"
     },
     {
       "id": 6,
-      "type": "xychart",
-      "title": "Deaths",
-      "gridPos": {
-        "x": 12,
-        "y": 4,
-        "w": 12,
-        "h": 16
-      },
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "clickhouse"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "clickhouse"
-          },
-          "editorType": "sql",
-          "format": 1,
-          "rawSql": "SELECT\n    (floor(x / $cell) + 0.5) * $cell AS cell_x,\n    (floor(z / $cell) + 0.5) * $cell AS cell_z,\n    count() AS deaths\nFROM meridian.events\nWHERE game_id = $game AND place_id = $place AND $__timeFilter(ts) AND event = 'death'\nGROUP BY cell_x, cell_z\nORDER BY deaths\nLIMIT 20000"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "continuous-YlRd"
-          },
-          "custom": {
-            "show": "points",
-            "pointShape": "square",
-            "pointSize": {
-              "fixed": 8
-            },
-            "pointStrokeWidth": 0,
-            "fillOpacity": 90
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "cell_x"
-            },
-            "properties": [
-              {
-                "id": "custom.axisLabel",
-                "value": "X (studs)"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "cell_z"
-            },
-            "properties": [
-              {
-                "id": "custom.axisLabel",
-                "value": "Z (studs)"
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "mapping": "manual",
-        "series": [
-          {
-            "frame": {
-              "matcher": {
-                "id": "byIndex",
-                "options": 0
-              }
-            },
-            "x": {
-              "matcher": {
-                "id": "byName",
-                "options": "cell_x"
-              }
-            },
-            "y": {
-              "matcher": {
-                "id": "byName",
-                "options": "cell_z"
-              }
-            },
-            "color": {
-              "matcher": {
-                "id": "byName",
-                "options": "deaths"
-              }
-            }
-          }
-        ],
-        "legend": {
-          "showLegend": false
-        },
-        "tooltip": {
-          "mode": "single"
-        }
-      },
-      "description": "Where players die on the X/Z plane.",
-      "pluginVersion": "13.2.3"
-    },
-    {
-      "id": 7,
       "type": "table",
       "title": "Deadliest spots",
       "gridPos": {
         "x": 0,
-        "y": 20,
+        "y": 22,
         "w": 12,
         "h": 11
       },
@@ -622,12 +569,12 @@
       "description": "Cells where deaths are most likely relative to the time players spend there. Cells with fewer than 20 samples are left out."
     },
     {
-      "id": 8,
+      "id": 7,
       "type": "barchart",
       "title": "Height profile",
       "gridPos": {
         "x": 12,
-        "y": 20,
+        "y": 22,
         "w": 12,
         "h": 11
       },

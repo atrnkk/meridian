@@ -26,8 +26,8 @@ docker compose up -d
 
 Then:
 
-- Grafana: `<MERIDIAN_URL>/`, user `admin`. The dashboards are under
-  Dashboards › dashboards › shared.
+- Grafana: `<MERIDIAN_URL>/`, user `admin`. It opens on the Overview; the other dashboards
+  are linked at its top and listed under Dashboards › dashboards › shared.
 - Ingest: `<MERIDIAN_URL>/ingest` (POST only, always as the `ingest` user).
 - Admin SQL shell: `docker compose exec clickhouse clickhouse-client`.
 - Stop: `docker compose down`. Add `-v` to also delete all data.
@@ -58,7 +58,8 @@ After changing `.env`, run `docker compose up -d`.
    module warns once and does nothing.
 
 The module tracks joins/leaves, spawns, deaths, position samples, and purchases on its
-own. Use `Meridian.Track(eventName, props)` for anything else. Per-game hooks go in a
+own. Use `Meridian.Track(eventName, props, player)` for anything else; `player` is
+optional and adds the player's user ID, session, and position. Per-game hooks go in a
 `MeridianHooks` folder in ServerScriptService: each ModuleScript there returns a
 function that receives `Track`.
 
@@ -68,15 +69,18 @@ The dashboards in `dashboards/shared/` work for every game: pick the game at the
 game sends events, the picker says "No data yet".
 
 - **Overview**: live players and servers, sessions, deaths, purchases, top events, and a
-  position heatmap. Refreshes every 5 seconds.
+  heatmap of the most played place. Refreshes every 5 seconds.
 - **Players**: new vs returning players, DAU/WAU/MAU, stickiness, session length,
   concurrent players, day 1/7/30 retention by cohort, and top players.
 - **Monetization**: purchases, buyers, conversion, repeat buyers, time to first purchase,
   and purchases by item, buyer, session minute, and hour.
 - **Events**: any event, including custom ones from `Meridian.Track`, broken down by each of
   its props, with the latest raw events.
-- **Map**: per place, heatmaps of player traffic and deaths, the deadliest spots, and a
-  height profile of time spent vs deaths.
+- **Map**: per place, a heatmap of player traffic with deaths marked, the deadliest
+  spots, and a height profile of time spent vs deaths.
+
+The heatmaps use Grafana's Geomap panel with studs mapped onto a tiny patch of fake
+latitude/longitude and the world map hidden, viewed from above (X right, Z down).
 
 Grafana won't save changes to these dashboards. Edit the JSON files instead; Grafana
 reloads them within 30 seconds.

@@ -168,7 +168,7 @@
         "textMode": "value",
         "justifyMode": "center"
       },
-      "description": "Distinct players attached to ${event}. Custom events from Meridian.Track have no player."
+      "description": "Distinct players attached to ${event}. Custom events only have one when Meridian.Track gets a player."
     },
     {
       "id": 3,

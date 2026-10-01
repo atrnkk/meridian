@@ -22,6 +22,7 @@ services:
     environment:
       GF_SERVER_ROOT_URL: ${MERIDIAN_URL:?set in .env}/
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set in .env}
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /meridian/dashboards/shared/overview.json
       # Skip Grafana's default plugin downloads; install only the ClickHouse data source.
       # GF_INSTALL_PLUGINS logs a deprecation warning, but it's the only installer that
       # still runs with preinstall disabled. Recheck when upgrading Grafana.
