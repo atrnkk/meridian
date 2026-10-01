@@ -1,0 +1,631 @@
+{
+  "uid": "meridian-monetization",
+  "title": "Monetization",
+  "description": "Purchases for one game.",
+  "tags": [
+    "meridian"
+  ],
+  "schemaVersion": 41,
+  "editable": false,
+  "refresh": "1m",
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "links": [
+    {
+      "title": "Meridian",
+      "type": "dashboards",
+      "tags": [
+        "meridian"
+      ],
+      "asDropdown": false,
+      "includeVars": true,
+      "keepTime": false,
+      "icon": "external link"
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "game",
+        "label": "Game",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "clickhouse"
+        },
+        "refresh": 1,
+        "sort": 1,
+        "query": "WITH seen AS (SELECT game_id FROM meridian.events WHERE ts > now() - INTERVAL 30 DAY GROUP BY game_id)\nSELECT game_id, if(g.name = '', toString(game_id), g.name) AS label\nFROM seen LEFT JOIN (SELECT game_id, name FROM meridian.games FINAL) AS g USING (game_id)\nUNION ALL\nSELECT 0, 'No data yet' WHERE (SELECT count() FROM seen) = 0",
+        "definition": "WITH seen AS (SELECT game_id FROM meridian.events WHERE ts > now() - INTERVAL 30 DAY GROUP BY game_id)\nSELECT game_id, if(g.name = '', toString(game_id), g.name) AS label\nFROM seen LEFT JOIN (SELECT game_id, name FROM meridian.games FINAL) AS g USING (game_id)\nUNION ALL\nSELECT 0, 'No data yet' WHERE (SELECT count() FROM seen) = 0"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Purchases",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT count() AS purchases FROM meridian.events WHERE game_id = $game AND event = 'purchase' AND $__timeFilter(ts)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "green"
+          },
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "description": "Completed purchases in the selected time range."
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Buyers",
+      "gridPos": {
+        "x": 4,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT uniqExact(user_id) AS buyers FROM meridian.events WHERE game_id = $game AND event = 'purchase' AND $__timeFilter(ts)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "description": "Distinct players who bought something."
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Conversion",
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT 100 * uniqExactIf(user_id, event = 'purchase') / nullIf(uniqExactIf(user_id, event = 'join'), 0) AS conversion\nFROM meridian.events\nWHERE game_id = $game AND event IN ('join', 'purchase') AND $__timeFilter(ts)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "noValue": "–",
+          "decimals": 2,
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "description": "Buyers as a share of players who joined in the selected time range."
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Purchases per buyer",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT count() / nullIf(uniqExact(user_id), 0) AS per_buyer FROM meridian.events WHERE game_id = $game AND event = 'purchase' AND $__timeFilter(ts)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "noValue": "–",
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Repeat buyers",
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT 100 * countIf(n > 1) / nullIf(count(), 0) AS repeat\nFROM (SELECT user_id, count() AS n FROM meridian.events WHERE game_id = $game AND event = 'purchase' AND $__timeFilter(ts) GROUP BY user_id)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "noValue": "–",
+          "decimals": 1,
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "description": "Share of buyers with more than one purchase in the selected time range."
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Time to first purchase",
+      "gridPos": {
+        "x": 20,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT quantileExact(0.5)(dateDiff('second', first_join, first_buy)) AS median\nFROM (\n    SELECT user_id, minIf(ts, event = 'join') AS first_join, minIf(ts, event = 'purchase') AS first_buy\n    FROM meridian.events\n    WHERE game_id = $game AND event IN ('join', 'purchase')\n    GROUP BY user_id\n    HAVING countIf(event = 'purchase') > 0 AND countIf(event = 'join') > 0\n        AND first_buy >= $__fromTime AND first_buy <= $__toTime\n)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "noValue": "–",
+          "decimals": 1,
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "description": "Median time from a player's first visit to their first purchase, for first purchases in the selected time range."
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Purchases over time",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 16,
+        "h": 9
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "rawSql": "SELECT $__timeInterval(ts) AS time,\n    countIf(JSONExtractString(props, 'kind') = 'product') AS products,\n    countIf(JSONExtractString(props, 'kind') = 'gamepass') AS game_passes\nFROM meridian.events\nWHERE game_id = $game AND event = 'purchase' AND $__timeFilter(ts)\nGROUP BY time\nORDER BY time"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 70,
+            "lineWidth": 1,
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "interval": "1d"
+    },
+    {
+      "id": 8,
+      "type": "barchart",
+      "title": "Minutes into session at purchase",
+      "gridPos": {
+        "x": 16,
+        "y": 4,
+        "w": 8,
+        "h": 9
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT\n    multiIf(m < 1, '< 1', m < 5, '1-5', m < 15, '5-15', m < 30, '15-30', m < 60, '30-60', '60+') AS minutes,\n    count() AS purchases\nFROM (\n    SELECT dateDiff('second', s.start, p.ts) / 60 AS m\n    FROM (SELECT session_id, ts FROM meridian.events WHERE game_id = $game AND event = 'purchase' AND $__timeFilter(ts)) AS p\n    INNER JOIN (SELECT session_id, min(ts) AS start FROM meridian.events WHERE game_id = $game AND event = 'join' GROUP BY session_id) AS s USING (session_id)\n)\nGROUP BY minutes\nORDER BY min(m)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 0
+          },
+          "min": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "green"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "xField": "minutes",
+        "orientation": "vertical",
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "multi"
+        },
+        "showValue": "auto",
+        "xTickLabelSpacing": 0
+      },
+      "description": "How long players had been in the session when they bought."
+    },
+    {
+      "id": 9,
+      "type": "table",
+      "title": "Items",
+      "gridPos": {
+        "x": 0,
+        "y": 13,
+        "w": 14,
+        "h": 10
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT\n    JSONExtractString(props, 'kind') AS kind,\n    JSONExtractRaw(props, 'id') AS id,\n    count() AS purchases,\n    uniqExact(user_id) AS buyers,\n    round(100 * count() / sum(count()) OVER (), 1) AS share\nFROM meridian.events\nWHERE game_id = $game AND event = 'purchase' AND $__timeFilter(ts)\nGROUP BY kind, id\nORDER BY purchases DESC\nLIMIT 200"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "share"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-GrYlRd"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "description": "Purchases by product or game pass ID. Meridian doesn't record prices, so Robux revenue isn't shown."
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "Top buyers",
+      "gridPos": {
+        "x": 14,
+        "y": 13,
+        "w": 10,
+        "h": 10
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT toString(user_id) AS player, count() AS purchases, uniqExact(JSONExtractRaw(props, 'id')) AS items, max(ts) AS last_purchase\nFROM meridian.events\nWHERE game_id = $game AND event = 'purchase' AND $__timeFilter(ts)\nGROUP BY user_id\nORDER BY purchases DESC\nLIMIT 100"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "player"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Roblox profile",
+                    "url": "https://www.roblox.com/users/${__value.raw}/profile",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "description": "Click a player to open their Roblox profile."
+    },
+    {
+      "id": 11,
+      "type": "barchart",
+      "title": "Purchases by hour of day (UTC)",
+      "gridPos": {
+        "x": 0,
+        "y": 23,
+        "w": 24,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT toString(toHour(ts)) AS hour, count() AS purchases\nFROM meridian.events\nWHERE game_id = $game AND event = 'purchase' AND $__timeFilter(ts)\nGROUP BY hour\nORDER BY toUInt8(hour)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 0
+          },
+          "min": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "green"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "xField": "hour",
+        "orientation": "vertical",
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "multi"
+        },
+        "showValue": "auto",
+        "xTickLabelSpacing": 0
+      }
+    }
+  ]
+}

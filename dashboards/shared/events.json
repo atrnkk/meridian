@@ -1,0 +1,651 @@
+{
+  "uid": "meridian-events",
+  "title": "Events",
+  "description": "Explore any event a game sends, including custom events from Meridian.Track, broken down by its props.",
+  "tags": [
+    "meridian"
+  ],
+  "schemaVersion": 41,
+  "editable": false,
+  "refresh": "10s",
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "links": [
+    {
+      "title": "Meridian",
+      "type": "dashboards",
+      "tags": [
+        "meridian"
+      ],
+      "asDropdown": false,
+      "includeVars": true,
+      "keepTime": false,
+      "icon": "external link"
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "game",
+        "label": "Game",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "clickhouse"
+        },
+        "refresh": 1,
+        "sort": 1,
+        "query": "WITH seen AS (SELECT game_id FROM meridian.events WHERE ts > now() - INTERVAL 30 DAY GROUP BY game_id)\nSELECT game_id, if(g.name = '', toString(game_id), g.name) AS label\nFROM seen LEFT JOIN (SELECT game_id, name FROM meridian.games FINAL) AS g USING (game_id)\nUNION ALL\nSELECT 0, 'No data yet' WHERE (SELECT count() FROM seen) = 0",
+        "definition": "WITH seen AS (SELECT game_id FROM meridian.events WHERE ts > now() - INTERVAL 30 DAY GROUP BY game_id)\nSELECT game_id, if(g.name = '', toString(game_id), g.name) AS label\nFROM seen LEFT JOIN (SELECT game_id, name FROM meridian.games FINAL) AS g USING (game_id)\nUNION ALL\nSELECT 0, 'No data yet' WHERE (SELECT count() FROM seen) = 0"
+      },
+      {
+        "name": "event",
+        "label": "Event",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "clickhouse"
+        },
+        "refresh": 2,
+        "query": "SELECT event FROM meridian.events\nWHERE game_id = $game AND event != 'position' AND ts > now() - INTERVAL 30 DAY\nGROUP BY event\nORDER BY event IN ('join', 'leave', 'spawn', 'death', 'purchase'), count() DESC",
+        "definition": "SELECT event FROM meridian.events\nWHERE game_id = $game AND event != 'position' AND ts > now() - INTERVAL 30 DAY\nGROUP BY event\nORDER BY event IN ('join', 'leave', 'spawn', 'death', 'purchase'), count() DESC",
+        "sort": 0
+      },
+      {
+        "name": "prop",
+        "label": "Prop",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "clickhouse"
+        },
+        "refresh": 2,
+        "query": "WITH keys AS (\n    SELECT arrayJoin(JSONExtractKeys(props)) AS key, count() AS n FROM meridian.events\n    WHERE game_id = $game AND event = ${event:sqlstring} AND ts > now() - INTERVAL 7 DAY\n    GROUP BY key\n)\nSELECT key FROM (\n    SELECT key, n FROM keys\n    UNION ALL\n    SELECT '(no props)', 0 WHERE (SELECT count() FROM keys) = 0\n)\nORDER BY n DESC\nLIMIT 50",
+        "definition": "WITH keys AS (\n    SELECT arrayJoin(JSONExtractKeys(props)) AS key, count() AS n FROM meridian.events\n    WHERE game_id = $game AND event = ${event:sqlstring} AND ts > now() - INTERVAL 7 DAY\n    GROUP BY key\n)\nSELECT key FROM (\n    SELECT key, n FROM keys\n    UNION ALL\n    SELECT '(no props)', 0 WHERE (SELECT count() FROM keys) = 0\n)\nORDER BY n DESC\nLIMIT 50",
+        "sort": 0
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Count",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT count() AS count FROM meridian.events WHERE game_id = $game AND event = ${event:sqlstring} AND $__timeFilter(ts)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "green"
+          },
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "description": "Times ${event} happened in the selected time range."
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Players",
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT uniqExactIf(user_id, user_id != 0) AS players FROM meridian.events WHERE game_id = $game AND event = ${event:sqlstring} AND $__timeFilter(ts)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "description": "Distinct players attached to ${event}. Custom events from Meridian.Track have no player."
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Per player",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT countIf(user_id != 0) / nullIf(uniqExactIf(user_id, user_id != 0), 0) AS per_player FROM meridian.events WHERE game_id = $game AND event = ${event:sqlstring} AND $__timeFilter(ts)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "noValue": "–",
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Servers",
+      "gridPos": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT uniqExact(server_id) AS servers FROM meridian.events WHERE game_id = $game AND event = ${event:sqlstring} AND $__timeFilter(ts)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "description": "Distinct servers that sent ${event}."
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "${event} over time",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "rawSql": "SELECT $__timeInterval(ts) AS time, count() AS count, uniqExactIf(user_id, user_id != 0) AS players\nFROM meridian.events\nWHERE game_id = $game AND event = ${event:sqlstring} AND $__timeFilter(ts)\nGROUP BY time\nORDER BY time"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 70,
+            "lineWidth": 1
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "interval": "1m"
+    },
+    {
+      "id": 6,
+      "type": "table",
+      "title": "${event} by ${prop}",
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 10,
+        "h": 10
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT replaceRegexpAll(JSONExtractRaw(props, ${prop:sqlstring}), '^\"|\"$', '') AS value, count() AS count, uniqExactIf(user_id, user_id != 0) AS players,\n    round(100 * count() / sum(count()) OVER (), 1) AS share\nFROM meridian.events\nWHERE game_id = $game AND event = ${event:sqlstring} AND $__timeFilter(ts)\nGROUP BY value\nORDER BY count DESC\nLIMIT 100"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "share"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-BlPu"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "description": "Values of the selected prop. Pick the prop at the top."
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Top ${prop} values over time",
+      "gridPos": {
+        "x": 10,
+        "y": 12,
+        "w": 14,
+        "h": 10
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "rawSql": "WITH top AS (\n    SELECT replaceRegexpAll(JSONExtractRaw(props, ${prop:sqlstring}), '^\"|\"$', '') AS value FROM meridian.events WHERE game_id = $game AND event = ${event:sqlstring} AND $__timeFilter(ts) GROUP BY value ORDER BY count() DESC LIMIT 8\n)\nSELECT $__timeInterval(ts) AS time, replaceRegexpAll(JSONExtractRaw(props, ${prop:sqlstring}), '^\"|\"$', '') AS value, count() AS count\nFROM meridian.events\nWHERE game_id = $game AND event = ${event:sqlstring} AND $__timeFilter(ts) AND value IN (SELECT value FROM top)\nGROUP BY time, value\nORDER BY time"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 70,
+            "lineWidth": 1,
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "min": 0,
+          "displayName": "${__field.labels.value}"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "The 8 most common values of the selected prop.",
+      "interval": "1m"
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Numeric ${prop}",
+      "gridPos": {
+        "x": 0,
+        "y": 22,
+        "w": 24,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "rawSql": "SELECT $__timeInterval(ts) AS time,\n    sum(JSONExtractFloat(props, ${prop:sqlstring})) AS sum,\n    avg(JSONExtractFloat(props, ${prop:sqlstring})) AS average\nFROM meridian.events\nWHERE game_id = $game AND event = ${event:sqlstring} AND $__timeFilter(ts) AND JSONType(props, ${prop:sqlstring}) IN ('Int64', 'UInt64', 'Double')\nGROUP BY time\nORDER BY time"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 70,
+            "lineWidth": 1
+          },
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "average"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.drawStyle",
+                "value": "points"
+              },
+              {
+                "id": "custom.pointSize",
+                "value": 6
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "Sum (bars) and average (dots, right axis) per interval when the selected prop is a number. Empty for text props.",
+      "interval": "1m"
+    },
+    {
+      "id": 9,
+      "type": "table",
+      "title": "Recent ${event} events",
+      "gridPos": {
+        "x": 0,
+        "y": 30,
+        "w": 24,
+        "h": 10
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT ts, if(user_id = 0, '', toString(user_id)) AS player, if(server_id = '', '(Studio)', server_id) AS server, toString(place_id) AS place, props\nFROM meridian.events\nWHERE game_id = $game AND event = ${event:sqlstring} AND $__timeFilter(ts)\nORDER BY ts DESC\nLIMIT 200"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "player"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Roblox profile",
+                    "url": "https://www.roblox.com/users/${__value.raw}/profile",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "description": "The latest 200, newest first."
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "All events",
+      "gridPos": {
+        "x": 0,
+        "y": 40,
+        "w": 24,
+        "h": 10
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT event, count() AS count, uniqExactIf(user_id, user_id != 0) AS players, min(ts) AS first, max(ts) AS last\nFROM meridian.events\nWHERE game_id = $game AND event != 'position' AND $__timeFilter(ts)\nGROUP BY event\nORDER BY count DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "event"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Explore",
+                    "url": "/d/meridian-events/events?var-game=${game}&var-event=${__value.raw}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "count"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-BlPu"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "description": "Every event this game sent in the selected time range, except position samples. Click one to explore it."
+    }
+  ]
+}

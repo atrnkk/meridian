@@ -1,0 +1,716 @@
+{
+  "uid": "meridian-map",
+  "title": "Map",
+  "description": "Where players go and die in one place of one game.",
+  "tags": [
+    "meridian"
+  ],
+  "schemaVersion": 41,
+  "editable": false,
+  "refresh": "1m",
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "links": [
+    {
+      "title": "Meridian",
+      "type": "dashboards",
+      "tags": [
+        "meridian"
+      ],
+      "asDropdown": false,
+      "includeVars": true,
+      "keepTime": false,
+      "icon": "external link"
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "game",
+        "label": "Game",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "clickhouse"
+        },
+        "refresh": 1,
+        "sort": 1,
+        "query": "WITH seen AS (SELECT game_id FROM meridian.events WHERE ts > now() - INTERVAL 30 DAY GROUP BY game_id)\nSELECT game_id, if(g.name = '', toString(game_id), g.name) AS label\nFROM seen LEFT JOIN (SELECT game_id, name FROM meridian.games FINAL) AS g USING (game_id)\nUNION ALL\nSELECT 0, 'No data yet' WHERE (SELECT count() FROM seen) = 0",
+        "definition": "WITH seen AS (SELECT game_id FROM meridian.events WHERE ts > now() - INTERVAL 30 DAY GROUP BY game_id)\nSELECT game_id, if(g.name = '', toString(game_id), g.name) AS label\nFROM seen LEFT JOIN (SELECT game_id, name FROM meridian.games FINAL) AS g USING (game_id)\nUNION ALL\nSELECT 0, 'No data yet' WHERE (SELECT count() FROM seen) = 0"
+      },
+      {
+        "name": "place",
+        "label": "Place",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "clickhouse"
+        },
+        "refresh": 2,
+        "query": "WITH places AS (\n    SELECT place_id, count() AS samples FROM meridian.events\n    WHERE game_id = $game AND event = 'position' AND ts > now() - INTERVAL 30 DAY\n    GROUP BY place_id\n)\nSELECT place_id, label FROM (\n    SELECT place_id, toString(place_id) AS label, samples FROM places\n    UNION ALL\n    SELECT 0, 'No positions yet', 0 WHERE (SELECT count() FROM places) = 0\n)\nORDER BY samples DESC",
+        "definition": "WITH places AS (\n    SELECT place_id, count() AS samples FROM meridian.events\n    WHERE game_id = $game AND event = 'position' AND ts > now() - INTERVAL 30 DAY\n    GROUP BY place_id\n)\nSELECT place_id, label FROM (\n    SELECT place_id, toString(place_id) AS label, samples FROM places\n    UNION ALL\n    SELECT 0, 'No positions yet', 0 WHERE (SELECT count() FROM places) = 0\n)\nORDER BY samples DESC",
+        "sort": 0
+      },
+      {
+        "name": "cell",
+        "label": "Cell size (studs)",
+        "type": "custom",
+        "query": "4,8,16,32,64,128",
+        "current": {
+          "text": "16",
+          "value": "16"
+        },
+        "options": [
+          {
+            "text": "4",
+            "value": "4",
+            "selected": false
+          },
+          {
+            "text": "8",
+            "value": "8",
+            "selected": false
+          },
+          {
+            "text": "16",
+            "value": "16",
+            "selected": true
+          },
+          {
+            "text": "32",
+            "value": "32",
+            "selected": false
+          },
+          {
+            "text": "64",
+            "value": "64",
+            "selected": false
+          },
+          {
+            "text": "128",
+            "value": "128",
+            "selected": false
+          }
+        ]
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Position samples",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT count() AS samples FROM meridian.events WHERE game_id = $game AND place_id = $place AND $__timeFilter(ts) AND event = 'position'"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "description": "One sample per player every 5 seconds."
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Deaths",
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT count() AS deaths FROM meridian.events WHERE game_id = $game AND place_id = $place AND $__timeFilter(ts) AND event = 'death'"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "red"
+          },
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Deaths per player-hour",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT countIf(event = 'death') / nullIf(countIf(event = 'position') * 5 / 3600, 0) AS rate\nFROM meridian.events\nWHERE game_id = $game AND place_id = $place AND $__timeFilter(ts) AND event IN ('death', 'position')"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "noValue": "–",
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "description": "Deaths divided by time spent in this place, estimated from position samples."
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Cells visited",
+      "gridPos": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT uniqExact(floor(x / $cell), floor(z / $cell)) AS cells FROM meridian.events WHERE game_id = $game AND place_id = $place AND $__timeFilter(ts) AND event = 'position'"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "description": "Distinct map cells with at least one position sample, at the selected cell size."
+    },
+    {
+      "id": 5,
+      "type": "xychart",
+      "title": "Player traffic",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 16
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT\n    (floor(x / $cell) + 0.5) * $cell AS cell_x,\n    (floor(z / $cell) + 0.5) * $cell AS cell_z,\n    count() AS samples\nFROM meridian.events\nWHERE game_id = $game AND place_id = $place AND $__timeFilter(ts) AND event = 'position'\nGROUP BY cell_x, cell_z\nORDER BY samples\nLIMIT 20000"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "continuous-BlYlRd"
+          },
+          "custom": {
+            "show": "points",
+            "pointShape": "square",
+            "pointSize": {
+              "fixed": 8
+            },
+            "pointStrokeWidth": 0,
+            "fillOpacity": 90
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cell_x"
+            },
+            "properties": [
+              {
+                "id": "custom.axisLabel",
+                "value": "X (studs)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cell_z"
+            },
+            "properties": [
+              {
+                "id": "custom.axisLabel",
+                "value": "Z (studs)"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "mapping": "manual",
+        "series": [
+          {
+            "frame": {
+              "matcher": {
+                "id": "byIndex",
+                "options": 0
+              }
+            },
+            "x": {
+              "matcher": {
+                "id": "byName",
+                "options": "cell_x"
+              }
+            },
+            "y": {
+              "matcher": {
+                "id": "byName",
+                "options": "cell_z"
+              }
+            },
+            "color": {
+              "matcher": {
+                "id": "byName",
+                "options": "samples"
+              }
+            }
+          }
+        ],
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "description": "Where players spend time, from position samples on the X/Z plane.",
+      "pluginVersion": "13.2.3"
+    },
+    {
+      "id": 6,
+      "type": "xychart",
+      "title": "Deaths",
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 16
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT\n    (floor(x / $cell) + 0.5) * $cell AS cell_x,\n    (floor(z / $cell) + 0.5) * $cell AS cell_z,\n    count() AS deaths\nFROM meridian.events\nWHERE game_id = $game AND place_id = $place AND $__timeFilter(ts) AND event = 'death'\nGROUP BY cell_x, cell_z\nORDER BY deaths\nLIMIT 20000"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "continuous-YlRd"
+          },
+          "custom": {
+            "show": "points",
+            "pointShape": "square",
+            "pointSize": {
+              "fixed": 8
+            },
+            "pointStrokeWidth": 0,
+            "fillOpacity": 90
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cell_x"
+            },
+            "properties": [
+              {
+                "id": "custom.axisLabel",
+                "value": "X (studs)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cell_z"
+            },
+            "properties": [
+              {
+                "id": "custom.axisLabel",
+                "value": "Z (studs)"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "mapping": "manual",
+        "series": [
+          {
+            "frame": {
+              "matcher": {
+                "id": "byIndex",
+                "options": 0
+              }
+            },
+            "x": {
+              "matcher": {
+                "id": "byName",
+                "options": "cell_x"
+              }
+            },
+            "y": {
+              "matcher": {
+                "id": "byName",
+                "options": "cell_z"
+              }
+            },
+            "color": {
+              "matcher": {
+                "id": "byName",
+                "options": "deaths"
+              }
+            }
+          }
+        ],
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "description": "Where players die on the X/Z plane.",
+      "pluginVersion": "13.2.3"
+    },
+    {
+      "id": 7,
+      "type": "table",
+      "title": "Deadliest spots",
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 12,
+        "h": 11
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT cell_x, cell_z, deaths, samples, round(1000 * deaths / samples, 1) AS per_1000_samples\nFROM (\n    SELECT\n        (floor(x / $cell) + 0.5) * $cell AS cell_x,\n        (floor(z / $cell) + 0.5) * $cell AS cell_z,\n        countIf(event = 'death') AS deaths,\n        countIf(event = 'position') AS samples\n    FROM meridian.events\n    WHERE game_id = $game AND place_id = $place AND $__timeFilter(ts) AND event IN ('death', 'position')\n    GROUP BY cell_x, cell_z\n)\nWHERE deaths > 0 AND samples >= 20\nORDER BY per_1000_samples DESC\nLIMIT 50"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "per_1000_samples"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-YlRd"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cell_x"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 75
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cell_z"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 75
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "deaths"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 75
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "samples"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 75
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "description": "Cells where deaths are most likely relative to the time players spend there. Cells with fewer than 20 samples are left out."
+    },
+    {
+      "id": 8,
+      "type": "barchart",
+      "title": "Height profile",
+      "gridPos": {
+        "x": 12,
+        "y": 20,
+        "w": 12,
+        "h": 11
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "WITH\n    (SELECT min(y) FROM meridian.events WHERE game_id = $game AND place_id = $place AND $__timeFilter(ts) AND event = 'position') AS lo,\n    (SELECT greatest(max(y) - min(y), 1) / 20 FROM meridian.events WHERE game_id = $game AND place_id = $place AND $__timeFilter(ts) AND event = 'position') AS step\nSELECT\n    toString(round(lo + band * step)) AS height,\n    round(100 * samples / nullIf(sum(samples) OVER (), 0), 1) AS time_spent,\n    round(100 * deaths / nullIf(sum(deaths) OVER (), 0), 1) AS deaths\nFROM (\n    SELECT greatest(least(floor((y - lo) / step), 19), 0) AS band,\n        countIf(event = 'position') AS samples, countIf(event = 'death') AS deaths\n    FROM meridian.events\n    WHERE game_id = $game AND place_id = $place AND $__timeFilter(ts) AND event IN ('death', 'position')\n    GROUP BY band\n)\nORDER BY band DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 0
+          },
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "deaths"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "time_spent"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "xField": "height",
+        "orientation": "horizontal",
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        },
+        "showValue": "auto",
+        "xTickLabelSpacing": 100
+      },
+      "description": "Share of time spent and share of deaths in 20 height (Y) bands, highest at the top. Where the red bar is longer, players die more than their time there would suggest."
+    }
+  ]
+}

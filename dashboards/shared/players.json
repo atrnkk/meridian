@@ -1,0 +1,857 @@
+{
+  "uid": "meridian-players",
+  "title": "Players",
+  "description": "Engagement and retention for one game.",
+  "tags": [
+    "meridian"
+  ],
+  "schemaVersion": 41,
+  "editable": false,
+  "refresh": "1m",
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "links": [
+    {
+      "title": "Meridian",
+      "type": "dashboards",
+      "tags": [
+        "meridian"
+      ],
+      "asDropdown": false,
+      "includeVars": true,
+      "keepTime": false,
+      "icon": "external link"
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "game",
+        "label": "Game",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "clickhouse"
+        },
+        "refresh": 1,
+        "sort": 1,
+        "query": "WITH seen AS (SELECT game_id FROM meridian.events WHERE ts > now() - INTERVAL 30 DAY GROUP BY game_id)\nSELECT game_id, if(g.name = '', toString(game_id), g.name) AS label\nFROM seen LEFT JOIN (SELECT game_id, name FROM meridian.games FINAL) AS g USING (game_id)\nUNION ALL\nSELECT 0, 'No data yet' WHERE (SELECT count() FROM seen) = 0",
+        "definition": "WITH seen AS (SELECT game_id FROM meridian.events WHERE ts > now() - INTERVAL 30 DAY GROUP BY game_id)\nSELECT game_id, if(g.name = '', toString(game_id), g.name) AS label\nFROM seen LEFT JOIN (SELECT game_id, name FROM meridian.games FINAL) AS g USING (game_id)\nUNION ALL\nSELECT 0, 'No data yet' WHERE (SELECT count() FROM seen) = 0"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Players",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 8,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT count() AS players, countIf(first_join >= $__fromTime) AS new, countIf(first_join < $__fromTime) AS returning\nFROM (\n    SELECT user_id, min(ts) AS first_join, max(ts) AS last_join\n    FROM meridian.events\n    WHERE game_id = $game AND event = 'join' AND ts <= $__toTime\n    GROUP BY user_id\n    HAVING last_join >= $__fromTime\n)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "center"
+      },
+      "description": "Players who joined in the selected time range. New players joined for the first time in it. First visits are only known for the last 90 days of data."
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Active players",
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 8,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT\n    uniqExactIf(user_id, ts > now() - INTERVAL 1 DAY) AS DAU,\n    uniqExactIf(user_id, ts > now() - INTERVAL 7 DAY) AS WAU,\n    uniqExact(user_id) AS MAU\nFROM meridian.events\nWHERE game_id = $game AND event = 'join' AND ts > now() - INTERVAL 30 DAY"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "center"
+      },
+      "description": "Players who joined in the last 1, 7, and 30 days, regardless of the time picker."
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Stickiness",
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT 100 * uniqExactIf(user_id, ts > now() - INTERVAL 1 DAY) / nullIf(uniqExact(user_id), 0) AS stickiness\nFROM meridian.events\nWHERE game_id = $game AND event = 'join' AND ts > now() - INTERVAL 30 DAY"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "noValue": "–",
+          "decimals": 1,
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "description": "Daily active players as a share of monthly active players (DAU / MAU)."
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Sessions per player",
+      "gridPos": {
+        "x": 20,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT count() / nullIf(uniqExact(user_id), 0) AS sessions\nFROM meridian.events\nWHERE game_id = $game AND event = 'join' AND $__timeFilter(ts)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "noValue": "–",
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "description": "Average joins per player in the selected time range."
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Median session",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT quantileExact(0.5)(JSONExtractFloat(props, 'duration')) AS median\nFROM meridian.events\nWHERE game_id = $game AND event = 'leave' AND $__timeFilter(ts)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "noValue": "–",
+          "decimals": 0,
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "description": "Median length of sessions that ended in the selected time range."
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Playtime per player",
+      "gridPos": {
+        "x": 4,
+        "y": 4,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT sum(JSONExtractFloat(props, 'duration')) / nullIf(uniqExact(user_id), 0) AS playtime\nFROM meridian.events\nWHERE game_id = $game AND event = 'leave' AND $__timeFilter(ts)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "noValue": "–",
+          "decimals": 0,
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "description": "Average total playtime per player across sessions that ended in the selected time range."
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "Peak online",
+      "gridPos": {
+        "x": 8,
+        "y": 4,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT max(players) AS peak\nFROM (\n    SELECT toStartOfMinute(ts) AS minute, uniqExact(session_id) AS players\n    FROM meridian.events\n    WHERE game_id = $game AND event = 'position' AND $__timeFilter(ts)\n    GROUP BY minute\n)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "green"
+          },
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "description": "Most players online in any one minute, from position samples."
+    },
+    {
+      "id": 8,
+      "type": "stat",
+      "title": "Retention",
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "WITH\n    cohorts AS (SELECT user_id, toDate(min(ts)) AS cohort FROM meridian.events WHERE game_id = $game AND event = 'join' GROUP BY user_id),\n    days AS (SELECT DISTINCT user_id, toDate(ts) AS day FROM meridian.events WHERE game_id = $game AND event = 'join')\nSELECT\n    100 * countIf(d1 AND cohort + 1 < today()) / nullIf(countIf(cohort + 1 < today()), 0) AS `Day 1`,\n    100 * countIf(d7 AND cohort + 7 < today()) / nullIf(countIf(cohort + 7 < today()), 0) AS `Day 7`,\n    100 * countIf(d30 AND cohort + 30 < today()) / nullIf(countIf(cohort + 30 < today()), 0) AS `Day 30`\nFROM (\n    SELECT c.user_id, c.cohort,\n        max(d.day = c.cohort + 1) AS d1, max(d.day = c.cohort + 7) AS d7, max(d.day = c.cohort + 30) AS d30\n    FROM cohorts AS c INNER JOIN days AS d ON d.user_id = c.user_id\n    GROUP BY c.user_id, c.cohort\n)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          },
+          "noValue": "–",
+          "decimals": 1,
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "center"
+      },
+      "description": "Share of new players who came back exactly 1, 7, or 30 days after their first visit (UTC days), over every player first seen in the last 90 days whose day N has passed. Ignores the time picker."
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Daily players: new vs returning",
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "rawSql": "WITH cohorts AS (SELECT user_id, toDate(min(ts)) AS cohort FROM meridian.events WHERE game_id = $game AND event = 'join' GROUP BY user_id)\nSELECT toDateTime(day) AS time, uniqExactIf(user_id, day = cohort) AS new, uniqExactIf(user_id, day > cohort) AS returning\nFROM (\n    SELECT DISTINCT user_id, toDate(ts) AS day\n    FROM meridian.events\n    WHERE game_id = $game AND event = 'join' AND $__timeFilter(ts)\n) AS a\nINNER JOIN cohorts USING (user_id)\nGROUP BY day\nORDER BY day"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 70,
+            "lineWidth": 1,
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "new"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "returning"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "Players who joined each UTC day, split by whether it was their first day."
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Concurrent players",
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "rawSql": "SELECT $__timeInterval(minute) AS time, max(players) AS peak\nFROM (\n    SELECT toStartOfMinute(ts) AS minute, uniqExact(session_id) AS players\n    FROM meridian.events\n    WHERE game_id = $game AND event = 'position' AND $__timeFilter(ts)\n    GROUP BY minute\n)\nGROUP BY time\nORDER BY time"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 12,
+            "lineWidth": 2,
+            "showPoints": "never"
+          },
+          "min": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "green"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "showLegend": false,
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "Peak players online in each interval, from per-minute position samples.",
+      "interval": "1m"
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Session length",
+      "gridPos": {
+        "x": 0,
+        "y": 17,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 0,
+          "rawSql": "SELECT\n    $__timeInterval(ts) AS time,\n    quantileExact(0.5)(JSONExtractFloat(props, 'duration')) AS median,\n    quantileExact(0.9)(JSONExtractFloat(props, 'duration')) AS p90\nFROM meridian.events\nWHERE game_id = $game AND event = 'leave' AND $__timeFilter(ts)\nGROUP BY time\nORDER BY time"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 12,
+            "lineWidth": 2,
+            "showPoints": "never"
+          },
+          "min": 0,
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "Median and 90th percentile length of sessions ending in each interval.",
+      "interval": "6h"
+    },
+    {
+      "id": 12,
+      "type": "barchart",
+      "title": "Sessions per player",
+      "gridPos": {
+        "x": 12,
+        "y": 17,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT\n    multiIf(n = 1, '1', n = 2, '2', n <= 5, '3-5', n <= 10, '6-10', n <= 20, '11-20', '21+') AS sessions,\n    count() AS players\nFROM (\n    SELECT user_id, count() AS n\n    FROM meridian.events\n    WHERE game_id = $game AND event = 'join' AND $__timeFilter(ts)\n    GROUP BY user_id\n)\nGROUP BY sessions\nORDER BY min(n)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 0
+          },
+          "min": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "purple"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "xField": "sessions",
+        "orientation": "vertical",
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "multi"
+        },
+        "showValue": "auto",
+        "xTickLabelSpacing": 0
+      },
+      "description": "How many times each player joined in the selected time range."
+    },
+    {
+      "id": 13,
+      "type": "table",
+      "title": "Retention by cohort",
+      "gridPos": {
+        "x": 0,
+        "y": 26,
+        "w": 24,
+        "h": 10
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "WITH\n    cohorts AS (SELECT user_id, toDate(min(ts)) AS cohort FROM meridian.events WHERE game_id = $game AND event = 'join' GROUP BY user_id),\n    days AS (SELECT DISTINCT user_id, toDate(ts) AS day FROM meridian.events WHERE game_id = $game AND event = 'join')\nSELECT\n    toString(cohort) AS `first day`,\n    count() AS players,\n    if(cohort + 1 < today(), round(100 * countIf(d1) / count(), 1), NULL) AS `Day 1`,\n    if(cohort + 3 < today(), round(100 * countIf(d3) / count(), 1), NULL) AS `Day 3`,\n    if(cohort + 7 < today(), round(100 * countIf(d7) / count(), 1), NULL) AS `Day 7`,\n    if(cohort + 14 < today(), round(100 * countIf(d14) / count(), 1), NULL) AS `Day 14`,\n    if(cohort + 30 < today(), round(100 * countIf(d30) / count(), 1), NULL) AS `Day 30`\nFROM (\n    SELECT c.user_id, c.cohort, max(d.day = c.cohort + 1) AS d1, max(d.day = c.cohort + 3) AS d3, max(d.day = c.cohort + 7) AS d7, max(d.day = c.cohort + 14) AS d14, max(d.day = c.cohort + 30) AS d30\n    FROM cohorts AS c INNER JOIN days AS d ON d.user_id = c.user_id\n    WHERE c.cohort >= toDate($__fromTime) AND c.cohort <= toDate($__toTime)\n    GROUP BY c.user_id, c.cohort\n)\nGROUP BY cohort\nORDER BY cohort DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "Day .*"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 60
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-BlPu"
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "gradient"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "null",
+                      "result": {
+                        "text": "",
+                        "color": "transparent",
+                        "index": 0
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "description": "Players grouped by their first UTC day, and the share who came back exactly N days later. Empty cells haven't happened yet."
+    },
+    {
+      "id": 14,
+      "type": "table",
+      "title": "Top players",
+      "gridPos": {
+        "x": 0,
+        "y": 36,
+        "w": 24,
+        "h": 10
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT\n    toString(user_id) AS player,\n    countIf(event = 'join') AS sessions,\n    sumIf(JSONExtractFloat(props, 'duration'), event = 'leave') AS playtime,\n    countIf(event = 'death') AS deaths,\n    countIf(event = 'purchase') AS purchases,\n    min(ts) AS first_event,\n    max(ts) AS last_event\nFROM meridian.events\nWHERE game_id = $game AND user_id != 0 AND event IN ('join', 'leave', 'death', 'purchase') AND $__timeFilter(ts)\nGROUP BY user_id\nORDER BY playtime DESC\nLIMIT 100"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "player"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Roblox profile",
+                    "url": "https://www.roblox.com/users/${__value.raw}/profile",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "playtime"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "description": "Players with the most playtime in the selected time range. Click a player to open their Roblox profile."
+    }
+  ]
+}
