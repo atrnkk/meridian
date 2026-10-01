@@ -12,43 +12,50 @@ Game servers insert batches straight into ClickHouse through Caddy. Every game s
 
 ## Setup
 
-You need a machine with Docker and a DNS name pointing at it, with ports 80 and 443 open.
+You need Docker. Copy `.env.example` to `.env`, fill in the passwords, and set
+`MERIDIAN_URL`:
+
+- **On your own PC:** `MERIDIAN_URL=http://localhost`. Studio playtests can send to it,
+  but live Roblox servers can't.
+- **On a server:** `MERIDIAN_URL=https://<hostname>`, with the hostname's DNS pointing at
+  the server and ports 80 and 443 open. Caddy gets the HTTPS certificate on first start.
 
 ```sh
-cp .env.example .env   # then fill it in
 docker compose up -d
 ```
 
-Caddy fetches an HTTPS certificate for `MERIDIAN_DOMAIN` on first start. Then:
+Then:
 
-- Grafana: `https://<MERIDIAN_DOMAIN>/`, user `admin`. The Overview dashboard is under
+- Grafana: `<MERIDIAN_URL>/`, user `admin`. The Overview dashboard is under
   Dashboards › dashboards › shared.
-- Ingest: `https://<MERIDIAN_DOMAIN>/ingest` (POST only, always as the `ingest` user).
+- Ingest: `<MERIDIAN_URL>/ingest` (POST only, always as the `ingest` user).
 - Admin SQL shell: `docker compose exec clickhouse clickhouse-client`.
+- Stop: `docker compose down`. Add `-v` to also delete all data.
 
 ## Environment variables
 
 | Variable | Used for |
 | --- | --- |
-| `MERIDIAN_DOMAIN` | Public hostname. Caddy serves HTTPS for it. |
+| `MERIDIAN_URL` | Address Caddy serves, e.g. `http://localhost` or `https://meridian.example.com`. |
 | `CLICKHOUSE_INGEST_PASSWORD` | Insert-only ClickHouse user that game servers use. |
 | `CLICKHOUSE_GRAFANA_PASSWORD` | Read-only ClickHouse user that Grafana uses. |
 | `GRAFANA_ADMIN_PASSWORD` | Grafana `admin` login. |
 
-After changing a password, run `docker compose up -d`.
+After changing `.env`, run `docker compose up -d`.
 
 ## Connecting a game
 
 1. Put the `Meridian` ModuleScript in ServerScriptService and require it once from a
    server script: `require(game:GetService("ServerScriptService").Meridian)`.
 2. In Studio's Game Settings › Security, turn on **Allow HTTP Requests**.
-3. Add two secrets on the experience's Creator Hub page (Configure › Secrets), with the
-   domain restricted to `MERIDIAN_DOMAIN`:
-   - `meridian_url`: `https://<MERIDIAN_DOMAIN>/ingest`
+3. Add two secrets:
+   - `meridian_url`: `<MERIDIAN_URL>/ingest`
    - `meridian_key`: the value of `CLICKHOUSE_INGEST_PASSWORD`
 
-   For Studio playtests, add the same two under Game Settings › Security › Local Secrets.
-   Without HTTP or the secrets, the module warns once and does nothing.
+   For Studio playtests, add them under Game Settings › Security › Local Secrets. For live
+   servers, add them on the experience's Creator Hub page (Configure › Secrets). Restrict
+   each secret's domain to the host in `MERIDIAN_URL`. Without HTTP or the secrets, the
+   module warns once and does nothing.
 
 The module tracks joins/leaves, spawns, deaths, position samples, and purchases on its
 own. Use `Meridian.Track(eventName, props)` for anything else. Per-game hooks go in a
@@ -60,7 +67,7 @@ function that receives `Track`.
 1. Copy `games/example` to `games/<name>`.
 2. In `views.sql`, set the game's `game.GameId`, add its name to `meridian.games`, and write
    the views you need. Use `IF NOT EXISTS` so the file can be re-run.
-3. Run `./apply-games.sh`.
+3. Run `./apply-games.sh` (on Windows, from Git Bash).
 4. Put dashboard JSON files in `games/<name>/dashboards/`. Grafana picks them up within
    30 seconds, in a folder matching the path.
 

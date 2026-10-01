@@ -1,4 +1,4 @@
-{$MERIDIAN_DOMAIN} {
+{$MERIDIAN_URL} {
 	# Game servers insert events here. Requests always authenticate as the ingest
 	# user, so no other ClickHouse user is reachable from outside.
 	@ingest {
